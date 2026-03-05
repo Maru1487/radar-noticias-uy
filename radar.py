@@ -12,12 +12,11 @@ CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 client = Client(api_key=GEMINI_KEY)
 
-# Nombres exactos validados para la librería en 2026
+# Simplificamos a los modelos que GitHub SÍ localizó en tu cuenta
 CANDIDATOS = [
-    'models/gemini-1.5-flash',
-    'models/gemini-1.5-flash-8b',
-    'models/gemini-2.0-flash-lite',
-    'models/gemini-2.0-flash'
+    'gemini-2.0-flash-001', # Nombre técnico directo
+    'gemini-2.0-flash', 
+    'gemini-2.0-flash-lite-preview-02-05' # El que suele tener más cuota libre
 ]
 
 FUENTES = [
@@ -25,7 +24,6 @@ FUENTES = [
     "https://www.elpais.com.uy/rss/latest",
     "https://www.subrayado.com.uy/anxml.aspx?0",
     "https://www.montevideo.com.uy/anxml.aspx?59",
-    "https://www.gub.uy/rss/noticias.xml",
     "https://ladiaria.com.uy/feeds/articulos/",
     "https://www.teledoce.com/telemundo/feed/",
     "https://www.telenoche.com.uy/feed"
@@ -47,23 +45,21 @@ def analizar_con_gemini(titular):
     
     for modelo in CANDIDATOS:
         try:
-            print(f"   🔎 Intentando con {modelo}...")
+            print(f"   🔎 Consultando a {modelo}...")
             response = client.models.generate_content(model=modelo, contents=prompt)
             res = response.text.strip()
-            print(f"   ✅ ÉXITO: {res}")
+            print(f"   ✅ RESPUESTA: {res}")
             return "SI" in res.upper()
         except Exception as e:
-            error_str = str(e)
-            if "404" in error_str:
-                print(f"   ❌ {modelo} no encontrado (404).")
-            elif "429" in error_str:
-                print(f"   ⏳ {modelo} sin cuota (429).")
-            else:
-                print(f"   ⚠️ Error inesperado en {modelo}: {error_str[:50]}")
+            print(f"   ⚠️ {modelo} ocupado/sin cuota.")
+            time.sleep(10) # Pausa larga si hay error para recuperar cuota
             continue 
     return False
 
-print(f"🚀 Patrullaje Transparente v3 - {datetime.now()}")
+print(f"🚀 Patrullaje Estratégico - {datetime.now()}")
+# PAUSA INICIAL: Esperamos 15 segundos para que la API se limpie antes de empezar
+print("⏳ Esperando ventana de cuota...")
+time.sleep(15)
 
 for url in FUENTES:
     try:
@@ -72,8 +68,7 @@ for url in FUENTES:
         ahora = datetime.now(timezone.utc)
         
         print(f"\n📡 Portal: {url}")
-        # Analizamos máximo 5 noticias por portal para no quemar la cuota diaria
-        for entry in feed.entries[:5]: 
+        for entry in feed.entries[:3]: # Solo 3 noticias por portal para máxima seguridad de cuota
             try:
                 pub_time = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 if ahora - pub_time < timedelta(minutes=25):
@@ -81,8 +76,8 @@ for url in FUENTES:
                     if analizar_con_gemini(entry.title):
                         enviar_telegram(f"🚨 *ALERTA DE IMPACTO*\n\n{entry.title}\n\n🔗 [Leer]({entry.link})")
                         print(f"   🔔 ALERTA ENVIADA")
-                    # PAUSA CRÍTICA: Esperamos 4 segundos entre noticias para evitar bloqueos
-                    time.sleep(4) 
+                    # Pausa de 10 segundos entre noticias: lento pero SEGURO
+                    time.sleep(10) 
             except: continue
     except Exception as e:
         print(f"⚠️ Error en {url}: {e}")
