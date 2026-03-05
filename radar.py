@@ -1,29 +1,30 @@
 import requests
 import os
 
-# Traemos las llaves EXACTAMENTE como están en tu captura
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("MY_CHAT_ID") # Corregido a 'MY' con Y
+# Traemos las llaves y les quitamos espacios invisibles (.strip())
+TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 def test_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    res = requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
-    return res.status_code
+    payload = {"chat_id": CHAT_ID, "text": msg}
+    res = requests.post(url, json=payload)
+    return res.status_code, res.text
 
-# Probamos con Presidencia para asegurar un status 200
-URL_TEST = "https://www.gub.uy/presidencia/rss"
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+# Probamos con Google para ver si hay internet libre
+URL_TEST = "https://www.google.com"
 
-print("🕵️ MODO FORENSE V2 ACTIVADO")
+print("🕵️ MODO FORENSE V3 ACTIVADO")
 try:
-    r = requests.get(URL_TEST, headers=HEADERS, timeout=15)
-    print(f"Status Presidencia: {r.status_code}")
+    r = requests.get(URL_TEST, timeout=10)
+    print(f"Status Google: {r.status_code}") # Debería ser 200
     
-    # Intentamos mandar el reporte al Telegram
-    status_t = test_telegram(f"📡 PRUEBA EXITOSA\n\nStatus Presidencia: {r.status_code}\n\n¡Al fin! El radar ya tiene conexión total.")
-    print(f"Status envío Telegram: {status_t}")
+    # Intentamos el envío y capturamos la respuesta completa de Telegram
+    status_t, respuesta = test_telegram("🚀 PRUEBA V3: Si llega esto, el caño está limpio.")
+    print(f"Status Telegram: {status_t}")
+    print(f"Respuesta de Telegram: {respuesta}") # Esto nos dirá el error exacto
     
 except Exception as e:
-    print(f"Error: {e}")
+    print(f"Error de conexión: {e}")
 
 print("Fin del análisis.")
