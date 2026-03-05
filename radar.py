@@ -2,6 +2,7 @@ from google.genai import Client
 import feedparser
 import requests
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 # --- CONFIGURACIÓN ---
@@ -10,7 +11,14 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 client = Client(api_key=GEMINI_KEY)
-MODELO_ELEGIDO = 'gemini-1.5-flash' 
+
+# Lista de candidatos que vimos en tu captura de Colab
+CANDIDATOS = [
+    'gemini-1.5-flash-latest', 
+    'gemini-1.5-flash-002',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-lite'
+]
 
 FUENTES = [
     "https://www.elobservador.com.uy/rss/home.xml",
@@ -36,16 +44,22 @@ def analizar_con_gemini(titular):
         f"Sos un editor senior uruguayo. ¿Este titular ROMPE LA INERCIA? (Crisis, seguridad, anuncios país). "
         f"Titular: '{titular}'. Responde 'SI' o 'NO' y EXPLICA brevemente tu razonamiento."
     )
-    try:
-        response = client.models.generate_content(model=MODELO_ELEGIDO, contents=prompt)
-        res = response.text.strip()
-        print(f"   🤖 Decisión IA: {res}") 
-        return "SI" in res.upper()
-    except Exception as e:
-        print(f"   ❌ Error en IA: {e}")
-        return False
+    
+    # Probamos cada modelo hasta que uno funcione
+    for modelo in CANDIDATOS:
+        try:
+            response = client.models.generate_content(model=modelo, contents=prompt)
+            res = response.text.strip()
+            print(f"   🤖 [{modelo}] Decisión: {res}")
+            return "SI" in res.upper()
+        except Exception as e:
+            if "404" in str(e):
+                continue # Probamos el siguiente nombre
+            print(f"   ⚠️ Error con {modelo}: {e}")
+            break
+    return False
 
-print(f"🚀 Patrullaje Transparente - {datetime.now()}")
+print(f"🚀 Patrullaje Resiliente - {datetime.now()}")
 
 for url in FUENTES:
     try:
@@ -62,6 +76,7 @@ for url in FUENTES:
                     if analizar_con_gemini(entry.title):
                         enviar_telegram(f"🚨 *ALERTA DE IMPACTO*\n\n{entry.title}\n\n🔗 [Leer]({entry.link})")
                         print(f"   ✅ ALERTA ENVIADA")
+                    time.sleep(1) # Pausa para no saturar la cuota
             except: continue
     except Exception as e:
         print(f"⚠️ Error en {url}: {e}")
