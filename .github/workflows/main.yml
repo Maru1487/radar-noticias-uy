@@ -1,7 +1,7 @@
 name: Radar Noticias UY
 on:
   schedule:
-    - cron: '*/30 * * * *' # Corre cada 30 minutos
+    - cron: '*/10 * * * *' # Corre cada 30 minutos
   workflow_dispatch: # Permite correrlo manualmente
 
 jobs:
