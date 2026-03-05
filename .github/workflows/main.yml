@@ -1,24 +1,30 @@
 name: Radar Noticias UY
+
 on:
+  workflow_dispatch: # Permite correrlo manual
   schedule:
-    - cron: '*/10 * * * *' # Corre cada 10 minutos
-  workflow_dispatch: # Permite correrlo manualmente
+    - cron: '*/10 * * * *' # Se ejecuta cada 10 minutos
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout código
+      - name: Checkout code
         uses: actions/checkout@v3
-      - name: Configurar Python
+
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - name: Instalar librerías
-        run: pip install feedparser requests google-generativeai
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt # ESTO INSTALA GOOGLE-GENAI Y ARREGLA EL ERROR
+
       - name: Ejecutar Radar
+        run: python radar.py
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }} # <-- CORREGIDO AQUÍ
-        run: python radar.py
+          MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }}
