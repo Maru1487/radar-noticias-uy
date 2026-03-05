@@ -5,15 +5,15 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
-# --- CONFIGURACIÓN DE SEGURIDAD ---
+# --- CONFIGURACIÓN ---
 GEMINI_KEY = os.getenv("GEMINI_KEY", "").strip()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 client = Client(api_key=GEMINI_KEY)
 
-# Usamos gemini-1.5-flash por ser el modelo con cuota más estable
-CANDIDATO_PRINCIPAL = 'gemini-1.5-flash'
+# Lista de nombres que Google acepta según la región y tipo de cuenta
+MODELOS_A_PROBAR = ['gemini-1.5-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash-latest']
 
 FUENTES = [
     "https://www.elobservador.com.uy/rss/home.xml",
@@ -30,50 +30,48 @@ HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0
 def enviar_telegram(texto):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": texto, "parse_mode": "Markdown"}
-    try: 
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"   ⚠️ Error enviando a Telegram: {e}")
+    try: requests.post(url, json=payload, timeout=20)
+    except: pass
 
 def analizar_con_gemini(titular):
     prompt = (
-        f"Sos un editor senior uruguayo. Tu tarea es detectar noticias que ROMPAN LA INERCIA (crisis, seguridad, anuncios país). "
-        f"Titular: '{titular}'. Responde 'SI' si es un hecho disruptivo o 'NO' si es rutina. EXPLICA brevemente."
+        f"Sos un editor uruguayo. ¿Este titular es una RUPTURA DE INERCIA (crisis, seguridad, anuncios país)? "
+        f"Responde SI o NO y explica en una frase. Titular: '{titular}'"
     )
     
-    try:
-        print(f"   🔎 Consultando a {CANDIDATO_PRINCIPAL}...")
-        response = client.models.generate_content(model=CANDIDATO_PRINCIPAL, contents=prompt)
-        res = response.text.strip()
-        print(f"   ✅ RESPUESTA: {res}")
-        return "SI" in res.upper()
-    except Exception as e:
-        print(f"   ⚠️ Falló la consulta a la IA: {str(e)[:100]}...")
-        return False
+    # Intentamos con los 3 nombres posibles hasta que uno funcione
+    for m in MODELOS_A_PROBAR:
+        try:
+            response = client.models.generate_content(model=m, contents=prompt)
+            print(f"   ✅ Respuesta ({m}): {response.text.strip()}")
+            return "SI" in response.text.upper()
+        except Exception as e:
+            if "404" in str(e):
+                continue # Probamos el siguiente nombre
+            print(f"   ⚠️ Error con {m}: {str(e)[:50]}")
+    return False
 
-print(f"🚀 Iniciando Patrullaje de Rescate - {datetime.now()}")
+print(f"🚀 Guardia de Emergencia - {datetime.now()}")
 
 for url in FUENTES:
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        # Aumentamos el timeout a 30 segundos para evitar el error de La Diaria
+        r = requests.get(url, headers=HEADERS, timeout=30)
         feed = feedparser.parse(r.content)
         ahora = datetime.now(timezone.utc)
         
         print(f"\n📡 Portal: {url}")
-        for entry in feed.entries[:2]: 
+        for entry in feed.entries[:3]: 
             try:
                 pub_time = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 if ahora - pub_time < timedelta(minutes=25):
-                    print(f"🧐 Evaluando titular: {entry.title}")
+                    print(f"🧐 Analizando: {entry.title}")
                     if analizar_con_gemini(entry.title):
-                        enviar_telegram(f"🚨 *ALERTA DE IMPACTO*\n\n{entry.title}\n\n🔗 [Leer noticia]({entry.link})")
-                        print(f"   🔔 ALERTA ENVIADA A TELEGRAM")
-                    
-                    # PAUSA DE SEGURIDAD: 12 segundos para no superar los límites gratuitos
-                    time.sleep(12) 
-            except Exception:
-                continue
+                        enviar_telegram(f"🚨 *ALERTA*\n\n{entry.title}\n\n🔗 [Leer]({entry.link})")
+                        print("   🔔 Alerta enviada")
+                    time.sleep(5) # Pausa para no saturar la cuota
+            except: continue
     except Exception as e:
-        print(f"⚠️ Error conectando con {url}: {e}")
+        print(f"⚠️ Error en {url}: {e}")
 
-print("\n🏁 Guardia completada correctamente.")
+print("\n🏁 Fin de guardia.")
