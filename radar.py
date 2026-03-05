@@ -12,11 +12,11 @@ CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 client = Client(api_key=GEMINI_KEY)
 
-# Lista de candidatos que vimos en tu captura de Colab
+# Probamos los nombres tal cual aparecen en tu lista de Colab
 CANDIDATOS = [
-    'gemini-1.5-flash-latest', 
-    'gemini-1.5-flash-002',
     'gemini-1.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-8b',
     'gemini-2.0-flash-lite'
 ]
 
@@ -42,24 +42,25 @@ def enviar_telegram(texto):
 def analizar_con_gemini(titular):
     prompt = (
         f"Sos un editor senior uruguayo. ¿Este titular ROMPE LA INERCIA? (Crisis, seguridad, anuncios país). "
-        f"Titular: '{titular}'. Responde 'SI' o 'NO' y EXPLICA brevemente tu razonamiento."
+        f"Titular: '{titular}'. Responde 'SI' o 'NO' y EXPLICA brevemente."
     )
     
-    # Probamos cada modelo hasta que uno funcione
     for modelo in CANDIDATOS:
         try:
+            print(f"   🔎 Probando con {modelo}...")
             response = client.models.generate_content(model=modelo, contents=prompt)
             res = response.text.strip()
-            print(f"   🤖 [{modelo}] Decisión: {res}")
+            print(f"   ✅ ÉXITO con {modelo}: {res}")
             return "SI" in res.upper()
         except Exception as e:
-            if "404" in str(e):
-                continue # Probamos el siguiente nombre
-            print(f"   ⚠️ Error con {modelo}: {e}")
-            break
+            # Imprimimos el error simplificado para no ensuciar el log
+            error_msg = str(e)[:100]
+            print(f"   ⚠️ Falló {modelo}: {error_msg}")
+            # NO hay break: si falla uno, prueba el que sigue
+            continue 
     return False
 
-print(f"🚀 Patrullaje Resiliente - {datetime.now()}")
+print(f"🚀 Patrullaje Transparente v2 - {datetime.now()}")
 
 for url in FUENTES:
     try:
@@ -68,15 +69,15 @@ for url in FUENTES:
         ahora = datetime.now(timezone.utc)
         
         print(f"\n📡 Portal: {url}")
-        for entry in feed.entries[:8]: 
+        for entry in feed.entries[:5]: # Reducimos a 5 por portal para cuidar la cuota
             try:
                 pub_time = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 if ahora - pub_time < timedelta(minutes=25):
                     print(f"🧐 Evaluando: {entry.title}")
                     if analizar_con_gemini(entry.title):
                         enviar_telegram(f"🚨 *ALERTA DE IMPACTO*\n\n{entry.title}\n\n🔗 [Leer]({entry.link})")
-                        print(f"   ✅ ALERTA ENVIADA")
-                    time.sleep(1) # Pausa para no saturar la cuota
+                        print(f"   🔔 ALERTA ENVIADA")
+                    time.sleep(2) # Pausa obligatoria para evitar el error 429
             except: continue
     except Exception as e:
         print(f"⚠️ Error en {url}: {e}")
