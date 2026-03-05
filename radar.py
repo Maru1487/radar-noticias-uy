@@ -3,8 +3,9 @@ import feedparser
 import requests
 import os
 import time
+from datetime import datetime, timedelta, timezone
 
-# --- CARGA DE LLAVES DESDE GITHUB ---
+# --- CONFIGURACIÓN ---
 GEMINI_KEY = os.getenv("GEMINI_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 MI_CHAT_ID = os.getenv("MI_CHAT_ID")
@@ -12,40 +13,51 @@ MI_CHAT_ID = os.getenv("MI_CHAT_ID")
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
-# --- FUENTES DE PRUEBA (SOLO DOS) ---
+# --- FUENTES AMPLIADAS ---
 FUENTES = [
     "https://www.elobservador.com.uy/rss/home.xml",
+    "https://www.elpais.com.uy/rss/ultimo-momento",
+    "https://www.subrayado.com.uy/rss/ultimo-momento",
+    "https://www.montevideo.com.uy/anxml.aspx?1",
     "https://www.gub.uy/presidencia/rss"
 ]
 
-# Máscara de navegador para evitar bloqueos
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
 def enviar_telegram(texto):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": MI_CHAT_ID, "text": texto, "parse_mode": "Markdown"})
+    try: requests.post(url, json={"chat_id": MI_CHAT_ID, "text": texto, "parse_mode": "Markdown"}, timeout=10)
+    except: pass
 
 def analizar(texto):
-    prompt = f"Sos un editor uruguayo. ¿Esto es una noticia relevante de hoy? Responde 'SI' o 'NO'. Titular: {texto}"
+    # Volvemos al criterio periodístico que buscabas
+    prompt = (
+        f"Sos un editor uruguayo senior. ¿Este titular es una RUPTURA DE INERCIA informativa? "
+        f"(Primicias, seguridad grave, crisis política, interpelaciones o anuncios de infraestructura). "
+        f"Titular: '{texto}'. Responde '🚨' si es relevante o 'SKIP' si es rutina."
+    )
     try:
         res = model.generate_content(prompt).text.strip()
-        return "SI" in res.upper()
+        return "🚨" in res
     except: return False
 
-print("🔍 Iniciando escaneo de prueba...")
+print(f"🚀 Ejecutando Radar - {datetime.now()}")
+
 for url in FUENTES:
     try:
-        # Leemos el sitio usando la máscara de navegador
         response = requests.get(url, headers=HEADERS, timeout=15)
         feed = feedparser.parse(response.content)
+        ahora = datetime.now(timezone.utc)
         
-        # Tomamos solo la noticia más reciente para la prueba
-        if feed.entries:
-            entry = feed.entries[0]
-            print(f"Leído: {entry.title}")
-            # Por ser prueba de vida, mandamos la primera que encuentre siempre
-            enviar_telegram(f"✅ *PRUEBA DE LECTURA EXITOSA*\n\nFuente: {url}\nTitular: {entry.title}")
+        for entry in feed.entries[:5]: # Revisamos las últimas 5 de cada portal
+            # FILTRO DE TIEMPO: Solo noticias de los últimos 20 minutos
+            pub_time = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+            if ahora - pub_time < timedelta(minutes=20):
+                if analizar(entry.title):
+                    enviar_telegram(f"🚨 *URGENTE*\n\n{entry.title}\n\n🔗 [Ver noticia]({entry.link})")
+                    print(f"Alerta enviada: {entry.title}")
+            
     except Exception as e:
-        enviar_telegram(f"❌ *ERROR DE LECTURA*\nFuente: {url}\nError: {str(e)}")
+        print(f"Error en {url}: {e}")
 
-print("Fin de la tarea.")
+print("✅ Ronda completada.")
