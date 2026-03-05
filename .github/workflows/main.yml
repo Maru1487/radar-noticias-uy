@@ -1,7 +1,7 @@
 name: Radar Noticias UY
 on:
   schedule:
-    - cron: '*/10 * * * *' # Corre cada 30 minutos
+    - cron: '*/10 * * * *' # Corre cada 10 minutos
   workflow_dispatch: # Permite correrlo manualmente
 
 jobs:
@@ -20,5 +20,5 @@ jobs:
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          MI_CHAT_ID: ${{ secrets.MI_CHAT_ID }}
+          MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }} # <-- CORREGIDO AQUÍ
         run: python radar.py
