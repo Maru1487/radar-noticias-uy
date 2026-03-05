@@ -12,8 +12,22 @@ CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 client = Client(api_key=GEMINI_KEY)
 
-# Lista de nombres que Google acepta según la región y tipo de cuenta
-MODELOS_A_PROBAR = ['gemini-1.5-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash-latest']
+# --- DIAGNÓSTICO: Buscamos qué modelos "ve" tu llave ---
+print("🔍 Buscando modelos habilitados para tu API KEY...")
+MODELO_PARA_USAR = None
+try:
+    for m in client.models.list():
+        # Buscamos el nombre corto (sin el prefijo 'models/')
+        name = m.name.split('/')[-1]
+        if '1.5-flash' in name or '2.0-flash-lite' in name:
+            MODELO_PARA_USAR = name
+            break
+    if not MODELO_PARA_USAR:
+        MODELO_PARA_USAR = 'gemini-1.5-flash' # Respaldo final
+    print(f"✅ El Editor Senior usará el modelo: {MODELO_PARA_USAR}")
+except Exception as e:
+    print(f"⚠️ No pude listar modelos: {e}. Usaré gemini-1.5-flash.")
+    MODELO_PARA_USAR = 'gemini-1.5-flash'
 
 FUENTES = [
     "https://www.elobservador.com.uy/rss/home.xml",
@@ -30,33 +44,32 @@ HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0
 def enviar_telegram(texto):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": texto, "parse_mode": "Markdown"}
-    try: requests.post(url, json=payload, timeout=20)
-    except: pass
+    try: 
+        requests.post(url, json=payload, timeout=30)
+    except: 
+        pass
 
 def analizar_con_gemini(titular):
     prompt = (
         f"Sos un editor uruguayo. ¿Este titular es una RUPTURA DE INERCIA (crisis, seguridad, anuncios país)? "
         f"Responde SI o NO y explica en una frase. Titular: '{titular}'"
     )
-    
-    # Intentamos con los 3 nombres posibles hasta que uno funcione
-    for m in MODELOS_A_PROBAR:
-        try:
-            response = client.models.generate_content(model=m, contents=prompt)
-            print(f"   ✅ Respuesta ({m}): {response.text.strip()}")
-            return "SI" in response.text.upper()
-        except Exception as e:
-            if "404" in str(e):
-                continue # Probamos el siguiente nombre
-            print(f"   ⚠️ Error con {m}: {str(e)[:50]}")
-    return False
+    try:
+        response = client.models.generate_content(model=MODELO_PARA_USAR, contents=prompt)
+        texto_ia = response.text.strip()
+        # Esto es lo que verás en el log de GitHub
+        print(f"   🤖 Decisión: {texto_ia}")
+        return "SI" in texto_ia.upper()
+    except Exception as e:
+        print(f"   ❌ Error analizando con IA: {str(e)[:100]}")
+        return False
 
-print(f"🚀 Guardia de Emergencia - {datetime.now()}")
+print(f"🚀 Radar Diagnóstico - {datetime.now()}")
 
 for url in FUENTES:
     try:
-        # Aumentamos el timeout a 30 segundos para evitar el error de La Diaria
-        r = requests.get(url, headers=HEADERS, timeout=30)
+        # Aumentamos a 40 segundos para evitar los cortes de La Diaria
+        r = requests.get(url, headers=HEADERS, timeout=40)
         feed = feedparser.parse(r.content)
         ahora = datetime.now(timezone.utc)
         
@@ -64,13 +77,14 @@ for url in FUENTES:
         for entry in feed.entries[:3]: 
             try:
                 pub_time = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-                if ahora - pub_time < timedelta(minutes=25):
+                if ahora - pub_time < timedelta(minutes=30):
                     print(f"🧐 Analizando: {entry.title}")
                     if analizar_con_gemini(entry.title):
                         enviar_telegram(f"🚨 *ALERTA*\n\n{entry.title}\n\n🔗 [Leer]({entry.link})")
                         print("   🔔 Alerta enviada")
-                    time.sleep(5) # Pausa para no saturar la cuota
-            except: continue
+                    time.sleep(5) 
+            except: 
+                continue
     except Exception as e:
         print(f"⚠️ Error en {url}: {e}")
 
