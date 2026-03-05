@@ -1,0 +1,24 @@
+name: Radar Noticias UY
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Corre cada 30 minutos
+  workflow_dispatch: # Permite correrlo manualmente
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Instalar librerías
+        run: pip install feedparser requests google-generativeai
+      - name: Ejecutar Radar
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          MI_CHAT_ID: ${{ secrets.MI_CHAT_ID }}
+        run: python radar.py
