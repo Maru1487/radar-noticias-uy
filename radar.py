@@ -12,8 +12,24 @@ CHAT_ID = os.getenv("MY_CHAT_ID", "").strip()
 
 client = Client(api_key=GEMINI_KEY)
 
-# FORZAMOS el único modelo que garantiza cuota gratuita real hoy
-MODELO_PARA_USAR = 'gemini-1.5-flash'
+# --- SISTEMA DE SELECCIÓN AUTOMÁTICA ---
+# Esto evita el error 404 buscando qué nombre exacto acepta tu cuenta
+MODELO_PARA_USAR = None
+try:
+    print("🔍 Buscando modelos habilitados en tu cuenta...")
+    for m in client.models.list():
+        # Preferimos la versión 1.5 por estabilidad, pero aceptamos 2.0 si es lo único que hay
+        if 'gemini-1.5-flash' in m.name or 'gemini-2.0-flash-lite' in m.name:
+            MODELO_PARA_USAR = m.name # Usamos el nombre completo (ej: models/gemini-1.5-flash)
+            break
+    
+    if MODELO_PARA_USAR:
+        print(f"✅ Modelo detectado y listo: {MODELO_PARA_USAR}")
+    else:
+        MODELO_PARA_USAR = 'models/gemini-1.5-flash' # Respaldo final
+except Exception as e:
+    print(f"❌ No pude listar modelos: {e}. Usaré respaldo.")
+    MODELO_PARA_USAR = 'models/gemini-1.5-flash'
 
 FUENTES = [
     "https://www.elobservador.com.uy/rss/home.xml",
@@ -38,24 +54,18 @@ def analizar_con_gemini(titular):
         f"Sos un editor uruguayo. ¿Este titular es una RUPTURA DE INERCIA (crisis, seguridad, anuncios país)? "
         f"Responde SI o NO y explica en una frase. Titular: '{titular}'"
     )
-    intentos = 0
-    while intentos < 2: # Si da error de cuota, reintenta una vez
-        try:
-            response = client.models.generate_content(model=MODELO_PARA_USAR, contents=prompt)
-            texto_ia = response.text.strip()
-            print(f"   🤖 Decisión: {texto_ia}")
-            return "SI" in texto_ia.upper()
-        except Exception as e:
-            if "429" in str(e):
-                print(f"   ⏳ Esperando 20s por cuota...")
-                time.sleep(20)
-                intentos += 1
-            else:
-                print(f"   ❌ Error IA: {str(e)[:50]}")
-                return False
-    return False
+    try:
+        # PAUSA CRÍTICA: Esperamos 20 segundos antes de cada consulta para evitar el error 429 (cuota agotada)
+        time.sleep(20)
+        response = client.models.generate_content(model=MODELO_PARA_USAR, contents=prompt)
+        res = response.text.strip()
+        print(f"   🤖 Decisión: {res}")
+        return "SI" in res.upper()
+    except Exception as e:
+        print(f"   ❌ Error en análisis: {e}")
+        return False
 
-print(f"🚀 Radar v1.5 Estable - {datetime.now()}")
+print(f"🚀 Radar v2.0 Final - {datetime.now()}")
 
 for url in FUENTES:
     try:
@@ -64,15 +74,15 @@ for url in FUENTES:
         ahora = datetime.now(timezone.utc)
         
         print(f"\n📡 Portal: {url}")
-        for entry in feed.entries[:2]: # Analizamos las 2 más frescas
+        # Analizamos SOLO la noticia más reciente de cada portal para maximizar el éxito con la cuota gratuita
+        for entry in feed.entries[:1]: 
             try:
                 pub_time = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
-                if ahora - pub_time < timedelta(minutes=40):
+                if ahora - pub_time < timedelta(minutes=45):
                     print(f"🧐 Analizando: {entry.title}")
                     if analizar_con_gemini(entry.title):
                         enviar_telegram(f"🚨 *ALERTA*\n\n{entry.title}\n\n🔗 [Leer]({entry.link})")
                         print("   🔔 Alerta enviada")
-                    time.sleep(10) # Pausa entre noticias
             except: continue
     except Exception as e:
         print(f"⚠️ Error en {url}: {e}")
